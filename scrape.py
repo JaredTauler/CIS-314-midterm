@@ -16,6 +16,43 @@ def get_program_list():
 
     program = matches[10]
 
+class CollectionNode():
+    # conditions = {
+    #     'AND',
+    #     'OR',
+    #     None
+    # }
+
+    # def __init__(self, node, condition):
+    #     pass
+    def __init__(self):
+        # self.condition = condition
+
+        self.nodes = []  # Would overcomplicate things to add nodes on init
+
+    def append(self, node):
+        self.nodes.append(node)
+
+    def __repr__(self):
+        return str([i for i in self.nodes])
+
+
+class RelationshipNode():
+    conditions = {
+        'AND',
+        # 'OR',
+        # None
+    }
+    def __init__(self, condition):
+        # super().__init__()
+
+        self.condition = condition
+
+        self.nodes = []
+
+    def append(self, node):
+        self.nodes.append(node)
+
 class ProgramNode:
     def __init__(self, _id: str):
         self.cores = []
@@ -33,8 +70,6 @@ class ProgramNode:
             self.cores.append(new)
 
 class CoreNode:
-    # courseList = [] TODO WTF? these are shared across all instance of the class??? oops...
-
     def __init__(self, html: str):
         self.courseList = []
 
@@ -43,33 +78,6 @@ class CoreNode:
             raise ValueError
 
         self.find_courses(html)
-
-    def find_courses(self, html:str):
-        pattern = r'acalog-course.*?<\/li>'
-        list_course_html = re.findall(pattern, html)
-
-        for course_html in list_course_html:
-            new_course = {}
-
-            find = lambda pattern: re.findall(pattern, course_html)
-
-            # Course name
-            # Get between the a tags
-            new_course['name'] = find(r'<a[^>]*>([^<]+)<\/a>')[0]  # TODO test case test for more than 1 here
-
-            # TODO Course credit amount
-
-            # Add to the previous course, that this course is in a relationship with it.
-            # Next step is easier this way.
-            if find('>OR<'):
-                self.courseList[-1]['or'] = True
-
-            # TODO do ands even occur?
-            if find('>AND<'):
-                self.courseList[-1]['and'] = True
-                raise ValueError # FIXME to get my attention.
-
-            self.courseList.append(new_course)
 
     def find_name(self, html: str) -> str:
         a = re.findall(
@@ -80,76 +88,96 @@ class CoreNode:
         return a[0] # TODO what if more than 1? testcase
 
 
+    def find_courses(self, html:str):
+        pattern = r'acalog-course.*?<\/li>'
+        list_course_html = re.findall(pattern, html)
+
+
+        master = CollectionNode()
+        current_coll = master
+        was_or = False
+        for index, course_html in enumerate(list_course_html):
+            new_course = CourseNode(course_html)
+
+            # find = lambda pattern:
+
+            # Add to the previous course, that this course is in a relationship with it.
+            # Next step is easier this way.
+
+            # The goal of this is to get the next HTML.
+            # Basically the same amount of work as not looking ahead. Easier to "grok" it this way.
+            def next_course_html():
+                c = list_course_html
+
+                i = index + 1 # Index starts at 0
+                if i > len(c) - 1: # Len starts counting at 1
+                    return None
+                else:
+                    return list_course_html[i]
+
+
+            def find_is_or():
+                html = next_course_html()
+                pattern = r'>OR<'
+
+                if html is None: # Last course of core
+                    return False
+                else:
+                    x = re.findall(pattern, html)
+
+                    # regex returns a list.
+                    return x # Empty lists evaluate to False, while non-empty evaluates to True
+
+            is_or = find_is_or()
+
+            # In the middle of an OR
+            if is_or and was_or:
+                current_coll.append(new_course)
+
+            # Starting an OR
+            elif is_or:
+                was_or = True
+
+                new_coll = RelationshipNode('or')
+
+                current_coll.append(new_coll)
+                current_coll = new_coll
+
+                current_coll.append(new_course)
+
+            # End of OR
+            elif was_or:
+                was_or = False
+                current_coll.append(new_course)
+                print([i.name for i in current_coll.nodes])
+                current_coll = master
+
+            # No OR
+            else:
+                current_coll.append(new_course)
+
+            # # TODO do ands even occur?
+            # if find('>AND<'):
+            #     self.courseList[-1]['and'] = True
+            #     raise ValueError # FIXME to get my attention.
+
+            # self.courseList.append(
+            #     CourseNode(course_html)
+            # )
+        # print(master)
+
+
+
+class CourseNode():
+    def __init__(self, html: str):
+        find = lambda pattern: re.findall(pattern, html)
+
+        # Course name
+        # Get between the a tags
+        self.name = find(r'<a[^>]*>([^<]+)<\/a>')[0]  # TODO test case test for more than 1 here
+
+        # TODO Course credit amount
+
+
 a = ProgramNode('2531')
 a.find_cores()
-print(len(a.cores))
-
-
-# def id_coresHTMLs(_id) -> list[str]:
-#     # Get program details
-#     html = debug_fetch(URL_PREVIEW + _id)
-#
-#     # Get cores
-#     # acalog-core(?:.(?!acalog-core))+\/ul
-#     pattern = r'acalog-core.*?<\/ul>'
-#     matches = re.findall(pattern, html)
-#
-#     return matches
-
-
-
-# def cores_coursesHTMLs(htmls: list[str]) -> tuple[str, list[str]]:
-#     for core in htmls:
-#         # Get courses
-#         pattern = r'acalog-course.*?<\/li>'
-#         matches = re.findall(pattern, core)
-#
-#         name = find_core_name(core) # FIXME evil dont care
-#         yield name, matches
-
-# def coursesHTMLs_data(htmls: list[str]) -> list[dict]:
-#     # TODO unit test number of courses with cores should be same total as without cores
-#     # Get list of courses
-#     course_list = []
-#     for string in htmls:
-#         new_course = {}
-#
-#         find = lambda pattern: re.findall(pattern, string)
-#
-#         # Course name
-#         # Get between the a tags
-#         new_course['name'] = find(r'<a[^>]*>([^<]+)<\/a>')[0]  # TODO test case test for more than 1 here
-#
-#         # TODO Course credit amount
-#
-#         # Add to the previous course, that this course is in a relationship with it.
-#         # Next step is easier this way.
-#         if find('>OR<'):
-#             course_list[-1]['or'] = True
-#
-#         # TODO do ands even occur?
-#         if find('>AND<'):
-#             course_list[-1]['and'] = True
-#
-#         course_list.append(new_course)
-#     return course_list
-
-
-
-# def getProgram(_id):
-#     cores = id_coresHTMLs(_id)
-#
-#     htmls2 = cores_coursesHTMLs(cores)
-#     # print(list(htmls2))
-#     # print(list(htmls2)[0])
-#     # print(core)
-#     for name, core_htmls in htmls2:
-#         # print(name)
-#         data = coursesHTMLs_data(core_htmls)
-#
-#         yield name, data
-    # print(data)
-
-# a = getProgram('2531')
-# print(a)
-# # print(list(program_to_cores(a)))
