@@ -17,10 +17,8 @@ def get_program_list():
     program = matches[10]
 
 class ProgramNode:
-    cores = []
-    _id = None
-
     def __init__(self, _id: str):
+        self.cores = []
         self._id = _id
 
     # Get Cores contained within Program
@@ -35,16 +33,16 @@ class ProgramNode:
             self.cores.append(new)
 
 class CoreNode:
-    courseList = []
+    # courseList = [] TODO WTF? these are shared across all instance of the class??? oops...
 
     def __init__(self, html: str):
+        self.courseList = []
+
         self.name = self.find_name(html)
         if self.name.isspace():
             raise ValueError
-        print(html)
-        print(self.name)
+
         self.find_courses(html)
-        print(self.courseList)
 
     def find_courses(self, html:str):
         pattern = r'acalog-course.*?<\/li>'
