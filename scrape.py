@@ -16,76 +16,140 @@ def get_program_list():
 
     program = matches[10]
 
+class ProgramNode:
+    cores = []
+    _id = None
 
-def id_coresHTMLs(_id) -> list[str]:
-    # Get program details
-    html = debug_fetch(URL_PREVIEW + _id)
+    def __init__(self, _id: str):
+        self._id = _id
 
-    # Get cores
-    # acalog-core(?:.(?!acalog-core))+\/ul
-    pattern = r'acalog-core.*?<\/ul>'
-    matches = re.findall(pattern, html)
+    # Get Cores contained within Program
+    def find_cores(self):
+        html = debug_fetch(URL_PREVIEW + self._id)
 
-    return matches
+        pattern = r'acalog-core.*?<\/ul>'
+        list_core_html = re.findall(pattern, html)
 
-def find_core_name(html: str) -> str:
-    a = re.findall(
-        '/a>([^<]+)(?:.(?!/a))+h2', # FIXME god awful
-        html
-    )
+        for core_html in list_core_html:
+            new = CoreNode(core_html)
+            self.cores.append(new)
 
-    return a[0] # TODO what if more than 1? testcase
+class CoreNode:
+    courseList = []
 
-def cores_coursesHTMLs(htmls: list[str]) -> tuple[str, list[str]]:
-    for core in htmls:
-        # Get courses
+    def __init__(self, html: str):
+        self.name = self.find_name(html)
+        if self.name.isspace():
+            raise ValueError
+        print(html)
+        print(self.name)
+        self.find_courses(html)
+        print(self.courseList)
+
+    def find_courses(self, html:str):
         pattern = r'acalog-course.*?<\/li>'
-        matches = re.findall(pattern, core)
+        list_course_html = re.findall(pattern, html)
 
-        name = find_core_name(core) # FIXME evil dont care
-        yield name, matches
+        for course_html in list_course_html:
+            new_course = {}
 
-def coursesHTMLs_data(htmls: list[str]) -> list[dict]:
-    # TODO unit test number of courses with cores should be same total as without cores
-    # Get list of courses
-    course_list = []
-    for string in htmls:
-        new_course = {}
+            find = lambda pattern: re.findall(pattern, course_html)
 
-        find = lambda pattern: re.findall(pattern, string)
+            # Course name
+            # Get between the a tags
+            new_course['name'] = find(r'<a[^>]*>([^<]+)<\/a>')[0]  # TODO test case test for more than 1 here
 
-        # Course name
-        # Get between the a tags
-        new_course['name'] = find(r'<a[^>]*>([^<]+)<\/a>')[0]  # TODO test case test for more than 1 here
+            # TODO Course credit amount
 
-        # TODO Course credit amount
+            # Add to the previous course, that this course is in a relationship with it.
+            # Next step is easier this way.
+            if find('>OR<'):
+                self.courseList[-1]['or'] = True
 
-        # Add to the previous course, that this course is in a relationship with it.
-        # Next step is easier this way.
-        if find('>OR<'):
-            course_list[-1]['or'] = True
+            # TODO do ands even occur?
+            if find('>AND<'):
+                self.courseList[-1]['and'] = True
+                raise ValueError # FIXME to get my attention.
 
-        # TODO do ands even occur?
-        if find('>AND<'):
-            course_list[-1]['and'] = True
+            self.courseList.append(new_course)
 
-        course_list.append(new_course)
-    return course_list
+    def find_name(self, html: str) -> str:
+        a = re.findall(
+            '/a>([^<]+)(?:.(?!/a))+h2', # FIXME god awful
+            html
+        )
+
+        return a[0] # TODO what if more than 1? testcase
+
+
+a = ProgramNode('2531')
+a.find_cores()
+print(len(a.cores))
+
+
+# def id_coresHTMLs(_id) -> list[str]:
+#     # Get program details
+#     html = debug_fetch(URL_PREVIEW + _id)
+#
+#     # Get cores
+#     # acalog-core(?:.(?!acalog-core))+\/ul
+#     pattern = r'acalog-core.*?<\/ul>'
+#     matches = re.findall(pattern, html)
+#
+#     return matches
 
 
 
-def getProgram(_id):
-    cores = id_coresHTMLs(_id)
+# def cores_coursesHTMLs(htmls: list[str]) -> tuple[str, list[str]]:
+#     for core in htmls:
+#         # Get courses
+#         pattern = r'acalog-course.*?<\/li>'
+#         matches = re.findall(pattern, core)
+#
+#         name = find_core_name(core) # FIXME evil dont care
+#         yield name, matches
 
-    htmls2 = cores_coursesHTMLs(cores)
-    # print(list(htmls2))
-    # print(list(htmls2)[0])
-    # print(core)
-    for name, core_htmls in htmls2:
-        # print(name)
-        data = coursesHTMLs_data(core_htmls)
+# def coursesHTMLs_data(htmls: list[str]) -> list[dict]:
+#     # TODO unit test number of courses with cores should be same total as without cores
+#     # Get list of courses
+#     course_list = []
+#     for string in htmls:
+#         new_course = {}
+#
+#         find = lambda pattern: re.findall(pattern, string)
+#
+#         # Course name
+#         # Get between the a tags
+#         new_course['name'] = find(r'<a[^>]*>([^<]+)<\/a>')[0]  # TODO test case test for more than 1 here
+#
+#         # TODO Course credit amount
+#
+#         # Add to the previous course, that this course is in a relationship with it.
+#         # Next step is easier this way.
+#         if find('>OR<'):
+#             course_list[-1]['or'] = True
+#
+#         # TODO do ands even occur?
+#         if find('>AND<'):
+#             course_list[-1]['and'] = True
+#
+#         course_list.append(new_course)
+#     return course_list
 
-        yield name, data
+
+
+# def getProgram(_id):
+#     cores = id_coresHTMLs(_id)
+#
+#     htmls2 = cores_coursesHTMLs(cores)
+#     # print(list(htmls2))
+#     # print(list(htmls2)[0])
+#     # print(core)
+#     for name, core_htmls in htmls2:
+#         # print(name)
+#         data = coursesHTMLs_data(core_htmls)
+#
+#         yield name, data
     # print(data)
 
 # a = getProgram('2531')
