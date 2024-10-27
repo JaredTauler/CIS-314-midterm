@@ -17,12 +17,7 @@ def get_program_list():
     program = matches[10]
 
 
-
-
-
-
-
-def id_coresHTMLs(_id) -> []:
+def id_coresHTMLs(_id) -> list[str]:
     # Get program details
     html = debug_fetch(URL_PREVIEW + _id)
 
@@ -33,15 +28,24 @@ def id_coresHTMLs(_id) -> []:
 
     return matches
 
-def cores_coursesHTMLs(htmls: list[str]) -> dict:
+def find_core_name(html: str) -> str:
+    a = re.findall(
+        '/a>([^<]+)(?:.(?!/a))+h2', # FIXME god awful
+        html
+    )
+
+    return a[0] # TODO what if more than 1? testcase
+
+def cores_coursesHTMLs(htmls: list[str]) -> tuple[str, list[str]]:
     for core in htmls:
         # Get courses
         pattern = r'acalog-course.*?<\/li>'
         matches = re.findall(pattern, core)
 
-        yield matches
+        name = find_core_name(core) # FIXME evil dont care
+        yield name, matches
 
-def coursesHTMLs_data(htmls: [str]):
+def coursesHTMLs_data(htmls: list[str]) -> list[dict]:
     # TODO unit test number of courses with cores should be same total as without cores
     # Get list of courses
     course_list = []
@@ -61,24 +65,29 @@ def coursesHTMLs_data(htmls: [str]):
         if find('>OR<'):
             course_list[-1]['or'] = True
 
-        # TODO do ands occur?
+        # TODO do ands even occur?
         if find('>AND<'):
             course_list[-1]['and'] = True
 
         course_list.append(new_course)
     return course_list
 
+
+
 def getProgram(_id):
-    htmls1 = id_coresHTMLs(_id)
-    # for core in htmls1:
-    htmls2 = cores_coursesHTMLs(htmls1)
+    cores = id_coresHTMLs(_id)
+
+    htmls2 = cores_coursesHTMLs(cores)
+    # print(list(htmls2))
     # print(list(htmls2)[0])
     # print(core)
-    for core_htmls in htmls2:
+    for name, core_htmls in htmls2:
+        # print(name)
         data = coursesHTMLs_data(core_htmls)
-        print(data)
+
+        yield name, data
     # print(data)
 
-a = getProgram('2531')
-print(a)
-# print(list(program_to_cores(a)))
+# a = getProgram('2531')
+# print(a)
+# # print(list(program_to_cores(a)))
