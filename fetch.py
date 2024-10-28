@@ -12,14 +12,15 @@ def fetch(url):
     )
     return x.text
 
-def debug_fetch(url):
+# To keep from hammering the website, this caches each request
+def cache_fetch(url):
     ext = '.html'
     name = re.sub(r'\W+', '', url) # Dollar store hashing
 
     fname = name + ext
 
     found = False
-    for f in os.listdir(save_dir): # TODO slow, no short circuiting
+    for f in os.listdir(save_dir): # FIXME slow, no short circuiting
         if fname == f.__str__():
             found = True
 
