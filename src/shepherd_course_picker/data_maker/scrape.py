@@ -4,8 +4,17 @@ from bs4 import BeautifulSoup
 import bs4
 import re
 import json
+
 URL_PROGRAMS = 'https://catalog.shepherd.edu/content.php?catoid=19&navoid=3646'
 URL_PREVIEW = 'https://catalog.shepherd.edu/preview_program.php?poid='
+
+
+def elemHasClass(elem: bs4.Tag, string: str) -> bool:
+    cl = elem.get('class')
+    if cl and string in cl:
+        return True
+    else:
+        return False
 
 
 # Check if element has a class
@@ -42,6 +51,7 @@ def findElementWithClassInSoup(source_soup: BeautifulSoup, element: str, _class:
 
     raise RuntimeError  # FIXME Get better error
 
+
 # def soupGetElementOfType(soup: BeautifulSoup, element: str):
 
 
@@ -67,6 +77,7 @@ class BaseNode():
             f"Can't encode type {type(self)}"
         )
 
+
 # Nodes that contain other nodes inherit this
 class CollectionNode(BaseNode):
     def __init__(self):
@@ -86,6 +97,24 @@ class CollectionNode(BaseNode):
     def __json__(self):
         return {
             'nodes': self.nodes
+        }
+
+class AdhocNode(BaseNode):
+    def __init__(self, source_element: bs4.Tag):
+        self.text = source_element.text
+
+    def __json__(self):
+        return {
+            "text": [self.text]
+        }
+
+
+class ErrorNode(BaseNode):
+    def __init__(self, text):
+        self.text = text
+    def __json__(self):
+        return {
+            'text': [self.text]
         }
 
 class CourseNode(BaseNode):
@@ -131,9 +160,46 @@ class RelationshipNode(CollectionNode):
 
         self.condition = condition
 
-class AdhocNode(BaseNode):
-    def __init__(self):
-        pass
+# Check an HTML adhoc element for good elements to be turned into nodes
+def checkAdhoc(source_element: bs4.Tag) -> list[bs4.Tag]:
+    p_list = elemDirectChildren(source_element, 'p')
+
+    if len(p_list) > 0:
+        good = []
+        for element in p_list:
+            new = AdhocNode(element)
+
+            # Element is bad ignore it
+            if new.text.isspace():
+                continue
+
+            else:
+                # Element is good and gets to go on the webpage
+                good.append(element)
+        return good
+    else:
+        return []
+
+# Turn acalog-adhocs into GOOD elements
+def cleanAdhoc(my_list: list[bs4.Tag]) -> list[bs4.Tag]:
+    new_list = []
+
+    i = 0
+    while my_list:
+        if elemHasClass(my_list[0], 'acalog-adhoc'):
+            list_to_concat = checkAdhoc(my_list[0])
+            my_list.pop(0)
+            my_list = list_to_concat + my_list
+
+
+        else:
+
+            new_list.append(my_list[0])
+            i += 1
+            my_list.pop(0)
+
+    return new_list
+
 
 # Cores contain courses (As well as other cores)
 class CoreNode(CollectionNode):
@@ -148,17 +214,108 @@ class CoreNode(CollectionNode):
 
         self.heading = self.find_heading(html)
 
-        self.nodes = self.find_courses(html) #FIXME find NODES not courses
+        # Determine if element has a list, and parse its data if so
+        ul = self.find_ul(elem)
+        if ul:
+            self.nodes = self.find_nodes(ul)
+
+        elif self.find_table(elem):
+            self.nodes.append(
+                ErrorNode(
+                    "(Table not implemented)"
+                )
+            )
 
         self.text = self.find_text(elem)
 
-    # This is different from adhoc-core. This is text attached to the core element
+
+    def find_table(self, elem):
+        return elem.find_all('table')
+
+    # HTML list (ul) element containing acalog-course and adhoc (il)
+    def find_ul(self, source_element: bs4.Tag) -> Union[bs4.Tag, None]:
+        mylist = elemDirectChildren(source_element, 'ul')
+        if len(mylist) > 1:
+            raise RuntimeError
+        elif len(mylist) == 1:
+            return mylist[0]
+        else:
+            return None
+
+    # TODO This was built when using regex
+    def find_nodes(self, source_element: bs4.Tag):
+        master = []
+        current_coll = master
+        was_or = False
+
+        il_elements = elemDirectChildren(source_element)
+        # il_elements = cleanAdhoc(il_elements)
+        for i, element in enumerate(il_elements):
+            element = il_elements[0]
+            # Is course
+            if elemHasClass(element, 'acalog-course'):
+                new_node = CourseNode(str(element))  # TODO update this to use bs4
+
+            # Is adhoc
+            else:
+                new_node = AdhocNode(element)
+
+            # The goal of this is to get the next HTML.
+            def next_course_html():
+
+                if i + 1 > len(il_elements) - 1:
+                    return None
+                else:
+                    nex = il_elements[i + 1]
+                    return str(nex)
+
+            def find_is_or():
+                html = next_course_html()
+                pattern = r'>OR<'
+
+                if html is None:  # Last course of core
+                    return False
+                else:
+                    x = re.findall(pattern, html)
+
+                    # regex returns a list.
+                    return x  # Empty lists evaluate to False, while non-empty evaluates to True
+
+            is_or = find_is_or()
+
+            # In the middle of an OR
+            if is_or and was_or:
+                current_coll.append(new_node)
+
+            # Starting an OR
+            elif is_or:
+                was_or = True
+
+                new_coll = RelationshipNode('or')
+
+                current_coll.append(new_coll)
+                current_coll = new_coll
+
+                current_coll.append(new_node)
+
+            # End of OR
+            elif was_or:
+                was_or = False
+                current_coll.append(new_node)
+                current_coll = master
+
+            # No OR
+            else:
+                current_coll.append(new_node)
+        return master
+
+    # This is different from adhoc-core. This is text attached to this node's HTML element
     def find_text(self, elem: bs4.Tag):
-        a = elemDirectChildren(elem, 'p') # Get direct children because it will go find the ORs (TODO ANDs?)
+        a = elemDirectChildren(elem, 'p')  # Get direct children because it will go find the ORs (TODO ANDs?)
 
         texts = []
         for i in a:
-            if not i.text.isspace(): # Some p tags have just blank space
+            if not i.text.isspace():  # Some p tags have just blank space
                 texts.append(i.text)
 
         return texts
@@ -196,69 +353,6 @@ class CoreNode(CollectionNode):
         else:
             return a[0]  # TODO Testcase for more than 1
 
-    # TODO This feels like it can be done recurisvely
-    def find_courses(self, html: str) -> list[Union[CourseNode, RelationshipNode]]:
-        pattern = r'acalog-course.*?<\/li>'
-        list_course_html = re.findall(pattern, html)
-
-        master = []
-        current_coll = master
-        was_or = False
-        for index, course_html in enumerate(list_course_html):
-            new_course = CourseNode(course_html)
-
-            # The goal of this is to get the next HTML.
-            def next_course_html():
-                c = list_course_html
-
-                i = index + 1  # Index starts at 0
-                if i > len(c) - 1:  # Len starts counting at 1
-                    return None
-                else:
-                    return list_course_html[i]
-
-            def find_is_or():
-                html = next_course_html()
-                pattern = r'>OR<'
-
-                if html is None:  # Last course of core
-                    return False
-                else:
-                    x = re.findall(pattern, html)
-
-                    # regex returns a list.
-                    return x  # Empty lists evaluate to False, while non-empty evaluates to True
-
-            is_or = find_is_or()
-
-            # In the middle of an OR
-            if is_or and was_or:
-                current_coll.append(new_course)
-
-            # Starting an OR
-            elif is_or:
-                was_or = True
-
-                new_coll = RelationshipNode('or')
-
-                current_coll.append(new_coll)
-                current_coll = new_coll
-
-                current_coll.append(new_course)
-
-            # End of OR
-            elif was_or:
-                was_or = False
-                current_coll.append(new_course)
-                current_coll = master
-
-            # No OR
-            else:
-                current_coll.append(new_course)
-
-        return master
-
-
 # TODO I feel like this should live inside of CoreNode
 # Recursively find cores
 # This takes an HTML tag.
@@ -273,7 +367,7 @@ def recurseForCores(elem: bs4.Tag) -> CollectionNode:
 
     last_parent_node = None
     for c in childs:
-        elem_class = c.get('class')[0] # FIXME what if more than one
+        elem_class = c.get('class')[0]  # FIXME what if more than one
 
         # Element is a list
         if elem_class == 'custom_leftpad_20':
@@ -379,6 +473,7 @@ def get_program_list() -> list[ProgramNode]:
         )
 
     return l
+
 
 def get_program(_id: int) -> ProgramNode:
     l = get_program_list()
