@@ -3,7 +3,7 @@ from typing import Union
 from bs4 import BeautifulSoup
 import bs4
 import re
-
+import json
 URL_PROGRAMS = 'https://catalog.shepherd.edu/content.php?catoid=19&navoid=3646'
 URL_PREVIEW = 'https://catalog.shepherd.edu/preview_program.php?poid='
 
@@ -42,6 +42,8 @@ def findElementWithClassInSoup(source_soup: BeautifulSoup, element: str, _class:
 
     raise RuntimeError  # FIXME Get better error
 
+# def soupGetElementOfType(soup: BeautifulSoup, element: str):
+
 
 # Get only DIRECT children.
 def elemDirectChildren(elem: bs4.Tag, name: str = None) -> list[bs4.Tag]:
@@ -55,25 +57,18 @@ def elemDirectChildren(elem: bs4.Tag, name: str = None) -> list[bs4.Tag]:
 
 # Scraping is combined with the model. It just seems easier to understand this way.
 
-
 class BaseNode():
-    # This should be overwritten
+    # These should be overwritten
     def render(self):
         raise RuntimeError
 
-    # def propagate(self):
-    #     self.render()
-
-
-# Collection of nodes. Just for typing's sake
-class NodeCollection(list):
-    pass
-    # def __init__(self):
-    #     pass
-
+    def __json__(self):
+        raise RuntimeError(
+            f"Can't encode type {type(self)}"
+        )
 
 # Nodes that contain other nodes inherit this
-class BaseCollectionNode(BaseNode):
+class CollectionNode(BaseNode):
     def __init__(self):
         super().__init__()
         self.nodes = []
@@ -88,12 +83,10 @@ class BaseCollectionNode(BaseNode):
     def append(self, node: BaseNode):
         self.nodes.append(node)
 
-    # # Render itself and its children. This way things can come apart and function without their parents
-    # def propagate(self):
-    #     super().propagate()
-    #     for node in self.nodes:
-    #         node.propagate()
-
+    def __json__(self):
+        return {
+            'nodes': self.nodes
+        }
 
 class CourseNode(BaseNode):
     def __init__(self, html: str):
@@ -112,26 +105,41 @@ class CourseNode(BaseNode):
     def __repr__(self):
         return self.name
 
+    def __json__(self):
+        return {
+            'name': self.name
+
+        }
+
 
 # This is to store relationships between courses.
-class RelationshipNode(BaseCollectionNode):
+class RelationshipNode(CollectionNode):
     conditions = {
         'OR',
         # 'AND',
         # None
     }
 
+    def __json__(self):
+        return {
+            'condition': self.condition,
+            'nodes': self.nodes
+        }
+
     def __init__(self, condition):
         super().__init__()
 
         self.condition = condition
 
+class AdhocNode(BaseNode):
+    def __init__(self):
+        pass
 
 # Cores contain courses (As well as other cores)
-class CoreNode(BaseCollectionNode):
-    def __init__(self, html: str):
+class CoreNode(CollectionNode):
+    def __init__(self, elem: bs4.Tag):
         super().__init__()
-
+        html = str(elem)
         # self.parent = parent
 
         self.name = self.find_name(html)
@@ -140,10 +148,31 @@ class CoreNode(BaseCollectionNode):
 
         self.heading = self.find_heading(html)
 
-        self.nodes = self.find_courses(html)
+        self.nodes = self.find_courses(html) #FIXME find NODES not courses
+
+        self.text = self.find_text(elem)
+
+    # This is different from adhoc-core. This is text attached to the core element
+    def find_text(self, elem: bs4.Tag):
+        a = elemDirectChildren(elem, 'p') # Get direct children because it will go find the ORs (TODO ANDs?)
+
+        texts = []
+        for i in a:
+            if not i.text.isspace(): # Some p tags have just blank space
+                texts.append(i.text)
+
+        return texts
 
     def __repr__(self):
         return f'{self.name}: {str(self.nodes)}'
+
+    def __json__(self):
+        return {
+            'name': self.name,
+            'heading': self.heading,
+            'nodes': self.nodes,
+            'text': self.text
+        }
 
     # def propagate(self):
 
@@ -233,33 +262,43 @@ class CoreNode(BaseCollectionNode):
 # TODO I feel like this should live inside of CoreNode
 # Recursively find cores
 # This takes an HTML tag.
-def recurseForCores(elem: bs4.Tag) -> NodeCollection:
+def recurseForCores(elem: bs4.Tag) -> CollectionNode:
     def nodeHasCoreChildren(node: bs4.Tag) -> bool:
         return c.find_all('div', class_='acalog-core') != []
 
     # We will be parsing cores and "lists" of cores.
     childs = elemDirectChildren(elem, 'div')  # Get all direct div children.
-    new_nodes = NodeCollection()
-
+    new_nodes = CollectionNode()
     # "For tag every tag that is direct child of given HTML element"
+
+    last_parent_node = None
     for c in childs:
-        # If node has children,
-        if nodeHasCoreChildren(c):
+        elem_class = c.get('class')[0] # FIXME what if more than one
+
+        # Element is a list
+        if elem_class == 'custom_leftpad_20':
             f = recurseForCores(c)  # Recursively run this function and find it's children
-            new_nodes.append(f)
 
-        # TODO elif on finding core and else raise exception
+            # For whatever reason, the parent and the child are siblings in the source HTML (FIXME different in some places?)
+            last_parent_node.append(
+                f
+            )
 
-        # Node is a core,
-        else:
-            new = CoreNode(str(c))  # FIXME pass tag not str
+
+        # Element is a core
+        elif elem_class == 'acalog-core':
+            new = CoreNode(c)
             new_nodes.append(new)
+            last_parent_node = new
+
+        else:
+            raise RuntimeError(f'Bad class: {elem_class}')
 
     return new_nodes
 
 
 # Programs contain cores
-class ProgramNode(BaseCollectionNode):
+class ProgramNode(CollectionNode):
     def __init__(self, _id: str, name: str):
         super().__init__()
 
@@ -280,6 +319,13 @@ class ProgramNode(BaseCollectionNode):
 
     def __str__(self):
         return self.name
+
+    def __json__(self):
+        return {
+            'name': self.name,
+            'id': self._id,
+            'nodes': self.nodes
+        }
 
     def make_html(self) -> str:
         return cache_fetch(URL_PREVIEW + self._id)
@@ -310,7 +356,9 @@ class ProgramNode(BaseCollectionNode):
 
         core_div = a.find('div')  # First div contains list of cores
 
-        found_core = recurseForCores(core_div)
+        # Purposefully throwing away the rest of this obj
+        found_core = recurseForCores(core_div).nodes
+        # Self will take on the nodes. This is necessary because of the way this function recurses
 
         return found_core
 
@@ -331,3 +379,12 @@ def get_program_list() -> list[ProgramNode]:
         )
 
     return l
+
+def get_program(_id: int) -> ProgramNode:
+    l = get_program_list()
+    for program in l:
+        if int(program._id) == _id:
+            program.render()
+            return program
+
+    raise RuntimeError(f"Bad ID: {_id}")

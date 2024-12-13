@@ -1,10 +1,11 @@
 from .scrape import (
     get_program_list,
+    get_program,
     ProgramNode,
     CoreNode,
     CourseNode,
     RelationshipNode,
-    BaseCollectionNode,
+    CollectionNode,
 )
 
 __all__ = [
@@ -14,5 +15,5 @@ __all__ = [
     "CoreNode",
     "CourseNode",
     "RelationshipNode",
-    "BaseCollectionNode",
+    "CollectionNode",
 ]

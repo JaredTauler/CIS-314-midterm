@@ -29,6 +29,7 @@ def cache_fetch(url):
         with open(furi, 'r', encoding='utf-8') as g: # FIXME test this on windows
             return g.read()
     else:
+        print("FETCHING")
         html = fetch(url)
 
         with open(furi, 'w', encoding='utf-8') as g:

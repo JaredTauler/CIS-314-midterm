@@ -1,0 +1,21 @@
+.node {
+    /*     width: 100px; */
+    /*     height: 100px; */
+    padding: 10px;
+    margin: 5px;
+    color: white;
+    /*     text-align: center; */
+    /*     display: flex; */
+    /*     justify-content: center; */
+    /*     align-items: center; */
+    border-radius: 12px;
+    font-family: Arial, sans-serif;
+}
+
+.node[depth="0"] {
+    background-color: #2e2e2e; /* Dark gray */
+}
+
+.node[depth="1"] {
+    background-color: #444444; /* Slightly different dark gray */
+}
