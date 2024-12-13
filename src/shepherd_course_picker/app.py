@@ -16,6 +16,10 @@ def toJSON(object):
 
 @app.route('/')
 def home():
+    return render_template('programs')
+
+@app.route('/picker')
+def home():
     return render_template('picker.html')
 
 @app.route('/api/programs')

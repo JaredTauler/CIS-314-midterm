@@ -1,55 +1,150 @@
+var Cart = []
+const CartElement = document.getElementsByClassName('cart')[0] // TODO use ID
 
-class Node {
-    constructor(input_data, depth=0) {
-        this.depth = depth
-        // Empty list of children
-        this.childNodes = []
+const TotalElement = document.getElementById('total_credits')
 
-        // Create a new DOM element for myself!
-        this.element = document.createElement('div')
+function array_remove(array, target) {
+    const index = array.indexOf(target);
+    if (index !== -1) {
+        array.splice(index, 1)
+    }
+}
 
-        this.element.classList.add('node');
+function array_in(array, target) {
+    return array.indexOf(target) > -1
+}
 
-        // For styling purposes (CSS is too hard)
-        this.element.setAttribute('depth', depth);
 
-        // Set my title
-        this.element.textContent = input_data['name']
+function updateCart(node) {
+    // Node is already in cart. remove it
+    if (array_in(Cart, node)) {
+        array_remove(Cart, node)
+        CartElement.removeChild(node.cartElement)
 
-        if (input_data['text']) {
-            input_data['text'].forEach(text => {
-                let new_element = document.createElement('p')
-                new_element.textContent = text
-                this.element.appendChild(
-                    new_element
-                )
-            })
-        }
+        node.pickerElement.classList.remove("in_cart")
+    }
 
-        // Recursively append children to myself
-        if (input_data['nodes']) {
-            input_data['nodes'].forEach(child_data => {
-                let newone = new Node(
-                    child_data,
-                (this.depth === 1 ? 0 : 1)
-                )
-                this.appendChildNode(newone)
-                }
-            );
-        }
+    // Add node to cart
+    else {
+        Cart.push(node)
+        CartElement.appendChild(
+            node.cartElement
+        )
+
+        node.pickerElement.classList.add("in_cart")
 
 
     }
 
-    appendChildNode(node){
+
+    let total = 0
+    Cart.forEach(node => {
+        total += node.credits
+    })
+    TotalElement.textContent = `Total Credits: ${total}`
+}
+
+class Node {
+
+    makeElement(input_data) {
+        // Create HTML element:
+
+        // Create a new DOM element for myself!
+        let new_element = document.createElement('div')
+
+        new_element.classList.add('node');
+
+        // For styling purposes (CSS is too hard)
+        new_element.setAttribute('depth', this.depth);
+
+        // Set my title
+        new_element.textContent = input_data['name']
+
+        // Node has credit and therefore should be clickable
+        if (this.credits) {
+            new_element.classList.add('clickable_node');
+            new_element.onclick = () => {
+                updateCart(this)
+            }
+        }
+
+        // Node has some text
+        if (input_data['text']) {
+            input_data['text'].forEach(text => {
+                let new_child_element = document.createElement('p')
+                new_child_element.textContent = text
+                new_element.appendChild(
+                    new_child_element
+                )
+            })
+        }
+
+        return new_element
+    }
+
+    // Right side of page
+    makeCartElement() {
+        let element_to_return = this.element.cloneNode(true)
+
+        element_to_return.onclick = this.element.onclick
+
+        return element_to_return
+
+    }
+
+    // Left side of page
+    makePickerElement() {
+        let element_to_return = this.element.cloneNode(true)
+        element_to_return.onclick = this.element.onclick // for some reason the on click doesnt work when copied from this.element
+
+        this.childNodes.forEach(child_node => {
+            element_to_return.appendChild(
+                child_node.pickerElement
+            )
+        })
+
+
+
+        return element_to_return
+    }
+
+
+    constructor(input_data, depth = 0) {
+        // Data about the node
+
+        this.depth = depth
+
+        this.childNodes = [] // Empty list of children
+
+        // Recursively append my (NODE) children to myself
+        if (input_data['nodes']) {
+            input_data['nodes'].forEach(child_data => {
+                    let newone = new Node(
+                        child_data,
+                        (this.depth === 1 ? 0 : 1)
+                    )
+                    this.appendChildNode(newone)
+                }
+            );
+        }
+
+        if (input_data['credits']) {
+            this.credits = input_data['credits']
+        }
+
+
+        this.element = this.makeElement(input_data)
+
+        this.pickerElement = this.makePickerElement()
+        this.cartElement = this.makeCartElement()
+
+
+    }
+
+    appendChildNode(node) {
         this.childNodes.push(
             node
         )
-        this.element.appendChild(
-            node.element
-        )
-
-        console.log("hi")
     }
 
 }
@@ -73,7 +168,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 data
             )
             document.getElementsByClassName("node")[0].appendChild(
-                rootNode.element
+                rootNode.pickerElement
             )
             console.log(rootNode)
             // processNode(

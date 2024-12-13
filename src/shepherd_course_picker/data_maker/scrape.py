@@ -118,15 +118,24 @@ class ErrorNode(BaseNode):
         }
 
 class CourseNode(BaseNode):
-    def __init__(self, html: str):
+    def __init__(self, elem: bs4.Tag):
         super().__init__()
+
+        html = str(elem)
         find = lambda pattern: re.findall(pattern, html)
 
         # Course name
         # Get between the a tags
         self.name = find(r'<a[^>]*>([^<]+)<\/a>')[0]  # TODO test case test for more than 1 here
 
-        # TODO Course credit amount
+        self.credits = self.find_credits(elem)
+
+    def find_credits(self, elem):
+        strong = elem.find_all('strong')
+        for i in str(strong):
+            if i.isdigit():
+                return int(i)
+        raise RuntimeError
 
     def __str__(self):
         return self.name
@@ -136,8 +145,8 @@ class CourseNode(BaseNode):
 
     def __json__(self):
         return {
-            'name': self.name
-
+            'name': self.name,
+            'credits': self.credits
         }
 
 
@@ -242,6 +251,9 @@ class CoreNode(CollectionNode):
         else:
             return None
 
+            pattern = r'acalog-course.*?<\/li>'
+        list_course_html = re.findall(pattern, html)
+
     # TODO This was built when using regex
     def find_nodes(self, source_element: bs4.Tag):
         master = []
@@ -249,12 +261,11 @@ class CoreNode(CollectionNode):
         was_or = False
 
         il_elements = elemDirectChildren(source_element)
-        # il_elements = cleanAdhoc(il_elements)
+        il_elements = cleanAdhoc(il_elements)
         for i, element in enumerate(il_elements):
-            element = il_elements[0]
             # Is course
             if elemHasClass(element, 'acalog-course'):
-                new_node = CourseNode(str(element))  # TODO update this to use bs4
+                new_node = CourseNode(element)
 
             # Is adhoc
             else:
@@ -443,7 +454,6 @@ class ProgramNode(CollectionNode):
             raise RuntimeError
 
         table_rows = elemDirectChildren(table)
-
         a = table_rows[1]  # TODO override implement every row
         if a.name != 'tr':  # This should be a table row
             raise RuntimeError
