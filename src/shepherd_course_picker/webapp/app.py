@@ -5,11 +5,6 @@ from shepherd_course_picker import data_maker
 
 import os
 
-from importlib import resources as impresources
-from . import templates
-
-
-
 # I really do not understand how to relatively get files within packages.
 
 # Band aid fix
