@@ -6,7 +6,9 @@ authors = [
 ]
 description = "Package for scraping Shepherd University catalog"
 readme = "README.md"
-requires-python = "==3.11.9"
+requires-python = ">=3.11.9"
 dependencies = [
-    'requests'
+    'requests',
+    'Flask',
+    'beautifulsoup4'
 ]

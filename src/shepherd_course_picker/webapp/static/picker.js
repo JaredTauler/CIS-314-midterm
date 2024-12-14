@@ -104,7 +104,6 @@ class Node {
         })
 
 
-
         return element_to_return
     }
 
@@ -154,34 +153,34 @@ var rootNode = null
 document.addEventListener("DOMContentLoaded", () => {
     // Function to fetch data from the server
     async function fetchData() {
-        try {
-            // Send a GET request to the server
-            const response = await fetch(`/api/programs/${2576}`);
-            // if (!response.ok) {
-            //     throw new Error(`HTTP error! Status: ${response.status}`);
-            // }
+        // Send a GET request to the server
+        const response = await fetch(`/api/programs/${program_id}`);
 
-            // Parse the JSON response
-            const data = await response.json();
+        // Parse the JSON response
+        const data = await response.json();
+        if (data['error']) {
+            throw new Error(data['error'])
+        } else {
+
+
             // console.log(data)
             rootNode = new Node(
                 data
             )
+
             document.getElementsByClassName("node")[0].appendChild(
                 rootNode.pickerElement
             )
-            console.log(rootNode)
-            // processNode(
-            //     data,
-            //     document.getElementsByClassName("node")[0]
-            // )
-            // Insert data into the table
-            // populateTable(data);
-        } catch (error) {
-            console.error("Error fetching data:", error);
+
         }
     }
 
     // Fetch data when the page loads
-    fetchData();
+    fetchData().catch(error =>
+    {
+        // This block runs if an error is thrown
+        alert(`Something went wrong.\nSomething: \"${error}\"`)
+        window.location = '/'
+    })
+
 });

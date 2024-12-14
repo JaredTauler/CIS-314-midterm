@@ -99,6 +99,7 @@ class CollectionNode(BaseNode):
             'nodes': self.nodes
         }
 
+
 class AdhocNode(BaseNode):
     def __init__(self, source_element: bs4.Tag):
         self.text = source_element.text
@@ -112,10 +113,12 @@ class AdhocNode(BaseNode):
 class ErrorNode(BaseNode):
     def __init__(self, text):
         self.text = text
+
     def __json__(self):
         return {
             'text': [self.text]
         }
+
 
 class CourseNode(BaseNode):
     def __init__(self, elem: bs4.Tag):
@@ -169,6 +172,7 @@ class RelationshipNode(CollectionNode):
 
         self.condition = condition
 
+
 # Check an HTML adhoc element for good elements to be turned into nodes
 def checkAdhoc(source_element: bs4.Tag) -> list[bs4.Tag]:
     p_list = elemDirectChildren(source_element, 'p')
@@ -188,6 +192,7 @@ def checkAdhoc(source_element: bs4.Tag) -> list[bs4.Tag]:
         return good
     else:
         return []
+
 
 # Turn acalog-adhocs into GOOD elements
 def cleanAdhoc(my_list: list[bs4.Tag]) -> list[bs4.Tag]:
@@ -237,7 +242,6 @@ class CoreNode(CollectionNode):
 
         self.text = self.find_text(elem)
 
-
     def find_table(self, elem):
         return elem.find_all('table')
 
@@ -251,8 +255,8 @@ class CoreNode(CollectionNode):
         else:
             return None
 
-            pattern = r'acalog-course.*?<\/li>'
-        list_course_html = re.findall(pattern, html)
+        #     pattern = r'acalog-course.*?<\/li>'
+        # list_course_html = re.findall(pattern, html)
 
     # TODO This was built when using regex
     def find_nodes(self, source_element: bs4.Tag):
@@ -364,7 +368,8 @@ class CoreNode(CollectionNode):
         else:
             return a[0]  # TODO Testcase for more than 1
 
-# TODO I feel like this should live inside of CoreNode
+
+# TODO I feel like this should live inside of a class
 # Recursively find cores
 # This takes an HTML tag.
 def recurseForCores(elem: bs4.Tag) -> CollectionNode:

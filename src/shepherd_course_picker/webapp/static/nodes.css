@@ -1,3 +1,5 @@
+
+
 .node {
     /*     width: 100px; */
     /*     height: 100px; */
@@ -24,6 +26,7 @@
 
 
 body, html {
+    background-color:black;
     margin: 0;
     padding: 0;
     /*height: 100%;*/
@@ -94,4 +97,8 @@ body, html {
 
 .in_cart {
     color: green;
+}
+
+#total_credits {
+    color:white;
 }
